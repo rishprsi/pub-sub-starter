@@ -27,11 +27,23 @@ func main() {
 
 	gameState := gamelogic.NewGameState(username)
 
-	queueName := fmt.Sprintf("pause.%s", username)
+	pauseQueueName := fmt.Sprintf("pause.%s", username)
 	pauseHandler := handlerPause(gameState)
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilDirect, queueName, routing.PauseKey, pubsub.SimpleQueueTransient, pauseHandler)
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilDirect, pauseQueueName, routing.PauseKey, pubsub.SimpleQueueTransient, pauseHandler)
 	if err != nil {
-		log.Printf("Failed to create channel and queue with the error: %s", err)
+		log.Printf("Failed to create pause channel and queue with the error: %s", err)
+	}
+
+	armyMoveQueueName := fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, username)
+	// pauseHandler := handlerPause(gameState)
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, armyMoveQueueName, routing.ArmyMovesPrefix+".*", pubsub.SimpleQueueTransient, handlerMove(gameState))
+	if err != nil {
+		log.Printf("Failed to create pause channel and queue with the error: %s", err)
+	}
+
+	channel, err := conn.Channel()
+	if err != nil {
+		log.Fatal("Couldn't create the publish channel")
 	}
 
 	for {
@@ -47,10 +59,20 @@ func main() {
 				log.Printf("Failed to spawn unit with err: %v", err)
 			}
 		case "move":
-			_, err := gameState.CommandMove(words)
+			armyMove, err := gameState.CommandMove(words)
 			if err != nil {
 				log.Printf("Could not move unit: %v", err)
 			}
+			err = pubsub.PublishJSON(
+				channel,
+				routing.ExchangePerilTopic,
+				armyMoveQueueName,
+				armyMove,
+			)
+			if err != nil {
+				log.Printf("Failed to publish army move command: %v\n", err)
+			}
+
 			log.Printf("Move completed")
 		case "status":
 			gameState.CommandStatus()
