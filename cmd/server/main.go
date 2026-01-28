@@ -27,15 +27,17 @@ func main() {
 	}
 	defer channel.Close()
 
-	topicChannel, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, "game_logs", "game_logs.*", pubsub.SimpleQueueDurable)
-	if err != nil {
-		log.Fatal("Could not create the topic channel and queue: ", err)
-	}
-	defer topicChannel.Close()
+	// topicChannel, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, "game_logs", "game_logs.*", pubsub.SimpleQueueDurable)
+	// if err != nil {
+	// 	log.Fatal("Could not create the topic channel and queue: ", err)
+	// }
+	// defer topicChannel.Close()
 
 	log.Println("Successfully connected to the Rabbitmq server")
 
 	gamelogic.PrintServerHelp()
+
+	pubsub.SubscribeGob(conn, routing.ExchangePerilTopic, "game_logs", "game_logs.*", pubsub.SimpleQueueDurable, handlerLogs())
 
 	for {
 		words := gamelogic.GetInput()

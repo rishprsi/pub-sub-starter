@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -26,6 +27,10 @@ func main() {
 	}
 
 	gameState := gamelogic.NewGameState(username)
+	channel, err := conn.Channel()
+	if err != nil {
+		log.Fatal("Couldn't create the publish channel")
+	}
 
 	pauseQueueName := fmt.Sprintf("pause.%s", username)
 	pauseHandler := handlerPause(gameState)
@@ -36,14 +41,14 @@ func main() {
 
 	armyMoveQueueName := fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, username)
 	// pauseHandler := handlerPause(gameState)
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, armyMoveQueueName, routing.ArmyMovesPrefix+".*", pubsub.SimpleQueueTransient, handlerMove(gameState))
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, armyMoveQueueName, routing.ArmyMovesPrefix+".*", pubsub.SimpleQueueTransient, handlerMove(gameState, channel))
 	if err != nil {
-		log.Printf("Failed to create pause channel and queue with the error: %s", err)
+		log.Printf("Failed to create move channel and queue with the error: %s", err)
 	}
 
-	channel, err := conn.Channel()
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, "war", routing.WarRecognitionsPrefix+".*", pubsub.SimpleQueueDurable, handlerWar(channel, gameState))
 	if err != nil {
-		log.Fatal("Couldn't create the publish channel")
+		log.Printf("Failed to create the durable war queue: %v", err)
 	}
 
 	for {
@@ -79,7 +84,21 @@ func main() {
 		case "help":
 			gamelogic.PrintClientHelp()
 		case "spam":
-			log.Printf("Spamming not allowed yet!")
+			if len(words) < 2 {
+				fmt.Println("Please provide the number to spam")
+				continue
+			}
+			spam, err := strconv.Atoi(words[1])
+			if err != nil {
+				fmt.Printf("Invalid number, format: spam number: %v", err)
+			}
+			for range spam {
+				logMessage := gamelogic.GetMaliciousLog()
+				err := pubsub.PublishGameLog(channel, logMessage, gameState)
+				if err != nil {
+					log.Printf("Failed to publish log in spam: %v", err)
+				}
+			}
 		case "quit":
 			gamelogic.PrintQuit()
 			return

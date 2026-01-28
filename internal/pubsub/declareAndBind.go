@@ -18,7 +18,10 @@ func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queu
 	}
 
 	isTransient := queueType == SimpleQueueTransient
-	queue, err := channel.QueueDeclare(queueName, !isTransient, isTransient, isTransient, false, nil)
+	args := amqp.Table{
+		"x-dead-letter-exchange": "peril_dlx",
+	}
+	queue, err := channel.QueueDeclare(queueName, !isTransient, isTransient, isTransient, false, args)
 	if err != nil {
 		return channel, queue, err
 	}
